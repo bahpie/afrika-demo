@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Combined Sinusoidal Text and Starfield</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      overflow: hidden;
+      font-family: monospace;
+      color: #0f0;
+    }
+    #pixelCanvas {
+      display: none; /* Hidden canvas for character sampling */
+    }
+    #waveCanvas {
+      display: block;
+      background: #000;
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    /* We'll overlay ASCII starfield on top of the waveCanvas */
+    #ascii {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      white-space: pre;
+      pointer-events: none; /* So clicks pass through to canvas if needed */
+      font-family: "Courier New", Courier, monospace;
+    }
+  </style>
+</head>
+<body>
+<!-- Hidden canvas for sampling pixel fonts -->
+<canvas id="pixelCanvas" width="50" height="50"></canvas>
+
+<!-- Main wave animation canvas -->
+<canvas id="waveCanvas"></canvas>
+
+<!-- A container to hold the ASCII starfield -->
+<pre id="ascii"></pre>
+
+<script>
+/**
+ * PART 1: Pixel Font Generation
+ * Draw each character on a hidden canvas (#pixelCanvas), then sample its pixels.
+ */
+function getPixelMap(char, options = {}) {
+  const {
+    font = '10px monospace',
+    threshold = 128,
+    canvasSize = 50,
+  } = options;
+
+  const canvas = document.getElementById('pixelCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+  ctx.font = font;
+  ctx.fillStyle = '#fff';
+  const xOffset = 0;
+  const yOffset = parseInt(font, 10) || 10;
+  ctx.fillText(char, xOffset, yOffset);
+
+  const imageData = ctx.getImageData(0, 0, canvasSize, canvasSize);
+  const data = imageData.data;
+
+  let minX = canvasSize;
+  let maxX = 0;
+  let minY = canvasSize;
+  let maxY = 0;
+
+  // Find bounding box.
+  for (let py = 0; py < canvasSize; py++) {
+    for (let px = 0; px < canvasSize; px++) {
+      const idx = (py * canvasSize + px) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const alpha = data[idx + 3];
+      const brightness = (r + g + b) / 3;
+
+      if (brightness > threshold && alpha > 0) {
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+      }
+    }
+  }
+
+  // If no pixels found, return a single space row (could be blank char).
+  if (minX > maxX || minY > maxY) {
+    return [" "];
+  }
+
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+
+  const rows = [];
+  for (let py = 0; py < height; py++) {
+    let rowStr = '';
+    for (let px = 0; px < width; px++) {
+      const idx = ((py + minY) * canvasSize + (px + minX)) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const alpha = data[idx + 3];
+      const brightness = (r + g + b) / 3;
+      rowStr += (brightness > threshold && alpha > 0) ? '#' : ' ';
+    }
+    rows.push(rowStr);
+  }
+
+  return rows;
+}
+
+function generateFontMap() {
+  const charsToMap = [];
+  for (let i = 32; i < 127; i++) {
+    charsToMap.push(String.fromCharCode(i));
+  }
+  const generatedFont = {};
+
+  charsToMap.forEach((ch) => {
+    generatedFont[ch] = getPixelMap(ch, {
+      font: '20px monospace',
+      threshold: 64,
+      canvasSize: 50,
+    });
+  });
+  return generatedFont;
+}
+
+// Build the pixel font mapping.
+const pixelFont = generateFontMap();
+
+/**
+ * PART 2: Sinusoidal Rainbow Text
+ */
+const waveCanvas = document.getElementById('waveCanvas');
+const wctx = waveCanvas.getContext('2d');
+
+function resizeWaveCanvas() {
+  waveCanvas.width = window.innerWidth;
+  waveCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeWaveCanvas);
+resizeWaveCanvas();
+
+// The text to scroll.
+const message = "Lilla AfrikaFestivalen 2025 - Norstuga Lycke - Allt som vanligt";
+
+// Pixel size.
+const PIXEL_SIZE = 5;
+// Spacing between letters in columns.
+const LETTER_SPACING = 1;
+// Scroll speed.
+const SCROLL_SPEED = 3;
+// Wave amplitude/frequency.
+const WAVE_AMPLITUDE = 250;
+const WAVE_FREQUENCY = 0.002;
+
+// Compute total width of the message in pixel cells.
+function getMessagePixelWidth(msg) {
+  let totalCells = 0;
+  for (let i = 0; i < msg.length; i++) {
+    const ch = msg[i];
+    const rows = pixelFont[ch];
+    if (!rows) {
+      // Missing char, treat as space.
+      totalCells += 1 + LETTER_SPACING;
+      continue;
+    }
+    const charWidth = rows[0].length;
+    totalCells += (charWidth + LETTER_SPACING);
+  }
+  return totalCells - LETTER_SPACING;
+}
+
+const totalPixelCells = getMessagePixelWidth(message);
+let textX = waveCanvas.width;
+
+// Simple rainbow color helper.
+function getRainbowColor(hue) {
+  return `hsl(${hue % 360}, 100%, 50%)`;
+}
+
+function animateWave(time) {
+  wctx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+
+  textX -= SCROLL_SPEED;
+  if (textX < -totalPixelCells * PIXEL_SIZE) {
+    textX = waveCanvas.width;
+  }
+
+  let drawX = textX;
+
+  for (let i = 0; i < message.length; i++) {
+    const ch = message[i];
+    const rows = pixelFont[ch] || [" "];
+    const charHeight = rows.length;
+    const charWidth = rows[0].length;
+
+    for (let row = 0; row < charHeight; row++) {
+      const rowStr = rows[row];
+      for (let col = 0; col < charWidth; col++) {
+        if (rowStr[col] === '#') {
+          const waveOffset = Math.sin((time + (drawX + col * PIXEL_SIZE)) * WAVE_FREQUENCY) * WAVE_AMPLITUDE;
+          const xPos = drawX + col * PIXEL_SIZE;
+          const yPos = waveCanvas.height / 2 - (charHeight * PIXEL_SIZE) / 2 + row * PIXEL_SIZE + waveOffset;
+          const hue = (time * 0.1 + col * 10 + row * 15) % 360;
+          wctx.fillStyle = getRainbowColor(hue);
+          wctx.fillRect(xPos, yPos, PIXEL_SIZE, PIXEL_SIZE);
+        }
+      }
+    }
+    drawX += (charWidth + LETTER_SPACING) * PIXEL_SIZE;
+  }
+
+  requestAnimationFrame(animateWave);
+}
+
+requestAnimationFrame(animateWave);
+
+/**
+ * PART 3: ASCII Starfield
+ */
+const asciiEl = document.getElementById('ascii');
+
+const width = 400;
+const height = 160;
+let frame = 0;
+const chars = " .:*+=#%@";
+const numStars = 200;
+let stars = [];
+
+for (let i = 0; i < numStars; i++) {
+  stars.push({
+    x: Math.random() * width - width / 2,
+    y: Math.random() * height - height / 2,
+    z: Math.random() * 20 + 1,
+  });
+}
+
+function generateStarfield() {
+  let field = Array.from({ length: height }, () => Array(width).fill(" "));
+
+  for (let star of stars) {
+    let sx = Math.round((star.x / star.z) * 20 + width / 2);
+    let sy = Math.round((star.y / star.z) * 10 + height / 2);
+    if (sx >= 0 && sx < width && sy >= 0 && sy < height) {
+      let brightness = Math.floor((1 - star.z / 20) * (chars.length - 1));
+      field[sy][sx] = chars[brightness];
+    }
+    star.z -= 0.2;
+    if (star.z < 1) {
+      star.x = Math.random() * width - width / 2;
+      star.y = Math.random() * height - height / 2;
+      star.z = 20;
+    }
+  }
+  return field.map((row) => row.join(""));
+}
+
+function renderStarfield() {
+  asciiEl.textContent = generateStarfield().join("\n");
+  frame++;
+  setTimeout(renderStarfield, 50);
+}
+
+renderStarfield();
+
+</script>
+</body>
+</html>
