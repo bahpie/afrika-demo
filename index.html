@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>80s Terminal Style Left-to-Right Wave</title>
   <style>
-    /* 80s terminal look: green text on black background, centered in viewport */
     html, body {
       margin: 0;
       padding: 0;
@@ -12,28 +11,34 @@
       width: 100%;
       background-color: black;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       font-family: "Courier New", Courier, monospace;
       color: #00ff00;
     }
 
-    /* Center the text in a large terminal style */
     #result {
       font-size: 2em;
       font-weight: bold;
       text-align: center;
     }
+
+    #fez-image {
+      width: 150px;
+      height: auto;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
-  <!-- We display our animated text in #result -->
+  <!-- Image above the animated text -->
+  <img id="fez-image" src="fez.webp" alt="Fez">
+
+  <!-- Animated text container -->
   <div id="result"></div>
 
   <script>
-    /**
-     * Capitalize only the character at the given index; everything else is lowercase.
-     */
     function capitalizeAt(str, index) {
       if (!str || index < 0 || index >= str.length) {
         return str;
@@ -46,48 +51,34 @@
     let animationRunning = false;
     let animationId = null;
 
-    /**
-     * Starts an animation that goes left to right only:
-     * - Index i goes from 0 up to string.length, then resets to 0 and continues.
-     * - The delay between steps is sine-based: slow at edges, fast in the middle.
-     */
     function startAnimation() {
-      stopAnimation(); // ensure clean start
+      stopAnimation();
 
-      // Hard-code the string we want to animate
       const userString = "laddar lilla afrikafestivalen...";
-      const rotString = "-\|/"
+      const rotString = "-|/";
 
       if (!userString) return;
       animationRunning = true;
 
       const n = userString.length;
-      const center = (n - 1) / 2; // "middle" index (fractional if even length)
-      let i = 0;                 // current index
+      const center = (n - 1) / 2;
+      let i = 0;
 
-      // Adjust to taste:
-      const minDelay = 20;  // fastest delay (ms) near the center
-      const maxDelay = 200; // slowest delay (ms) at the edges
+      const minDelay = 20;
+      const maxDelay = 200;
 
       function animate() {
         if (!animationRunning) return;
 
-        // Update displayed text
-        document.getElementById('result').textContent = capitalizeAt(userString, i) + rotString[i%3 ];
+        document.getElementById('result').textContent = capitalizeAt(userString, i) + rotString[i % 3];
 
-        // Distance from the center, as fraction in [0..1].
-        // i=0 or i=n-1 => distance=~1 => slower delay
-        // i ~ center => distance=0 => faster delay
         const distance = Math.abs(i - center) / center;
-        // Use sine-based formula:
-        // distance = 0 => sin(0)=0 => delay = minDelay
-        // distance = 1 => sin(pi/2)=1 => delay = maxDelay
         const sineFrac = Math.sin(distance * (Math.PI / 2));
         const delay = minDelay + (maxDelay - minDelay) * sineFrac;
 
         i++;
         if (i >= n) {
-          i = 0; // once we reach the end, reset to 0 (only left-to-right)
+          i = 0;
         }
 
         animationId = setTimeout(animate, delay);
@@ -96,9 +87,6 @@
       animate();
     }
 
-    /**
-     * Stops the current animation.
-     */
     function stopAnimation() {
       animationRunning = false;
       if (animationId) {
@@ -107,10 +95,9 @@
       }
     }
 
-    // Start automatically on load
     setTimeout(() => {
       window.location = "sinetext.html"
-    }, "6000");
+    }, 6000);
     window.onload = startAnimation;
   </script>
 </body>
