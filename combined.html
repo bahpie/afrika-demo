@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lilla AfrikaFestivalen</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      width: 100%;
+      background-color: black;
+      font-family: "Courier New", Courier, monospace;
+      color: #00ff00;
+    }
+
+    .screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 100%;
+      display: none;
+    }
+
+    #introScreen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1;
+    }
+
+    #fez-image {
+      width: 150px;
+      height: auto;
+      margin-bottom: 20px;
+    }
+
+    #result {
+      font-size: 2em;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #pixelCanvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <audio id="bg-audio" src="wermland.mp3" autoplay></audio>
+
+  <!-- INTRO SCREEN -->
+  <div id="introScreen" class="screen">
+    <img id="fez-image" src="fez.webp" alt="Fez">
+    <div id="result"></div>
+  </div>
+
+  <!-- SINETEXT SCREEN -->
+  <div id="sinetextScreen" class="screen">
+    <canvas id="pixelCanvas" width="50" height="50"></canvas>
+    <canvas id="starCanvas"></canvas>
+    <canvas id="waveCanvas"></canvas>
+  </div>
+
+  <script>
+    // ------------------ INDEX INTRO -------------------
+    function capitalizeAt(str, index) {
+      if (!str || index < 0 || index >= str.length) return str;
+      const lowerString = str.toLowerCase();
+      const capitalizedChar = lowerString[index].toUpperCase();
+      return lowerString.slice(0, index) + capitalizedChar + lowerString.slice(index + 1);
+    }
+
+    let animationRunning = false;
+    let animationId = null;
+
+    function startIntroAnimation() {
+      const userString = "laddar lilla afrikafestivalen...";
+      const rotString = "-|/";
+      const result = document.getElementById("result");
+
+      let i = 0;
+      const n = userString.length;
+      const center = (n - 1) / 2;
+      const minDelay = 20;
+      const maxDelay = 200;
+
+      animationRunning = true;
+
+      function animate() {
+        if (!animationRunning) return;
+        result.textContent = capitalizeAt(userString, i) + rotString[i % 3];
+
+        const distance = Math.abs(i - center) / center;
+        const sineFrac = Math.sin(distance * (Math.PI / 2));
+        const delay = minDelay + (maxDelay - minDelay) * sineFrac;
+
+        i = (i + 1) % n;
+        animationId = setTimeout(animate, delay);
+      }
+      animate();
+    }
+
+    // ------------------ SINETEXT -------------------
+    function getPixelMap(char, options = {}) {
+      const { font = '10px monospace', threshold = 128, canvasSize = 50 } = options;
+      const canvas = document.getElementById('pixelCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvasSize, canvasSize);
+      ctx.font = font;
+      ctx.fillStyle = '#fff';
+      ctx.fillText(char, 0, parseInt(font, 10) || 10);
+      const data = ctx.getImageData(0, 0, canvasSize, canvasSize).data;
+
+      let minX = canvasSize, maxX = 0, minY = canvasSize, maxY = 0;
+      for (let py = 0; py < canvasSize; py++) {
+        for (let px = 0; px < canvasSize; px++) {
+          const idx = (py * canvasSize + px) * 4;
+          const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+          if (brightness > threshold && data[idx + 3] > 0) {
+            minX = Math.min(minX, px);
+            maxX = Math.max(maxX, px);
+            minY = Math.min(minY, py);
+            maxY = Math.max(maxY, py);
+          }
+        }
+      }
+      if (minX > maxX || minY > maxY) return [" "];
+      const rows = [];
+      for (let py = minY; py <= maxY; py++) {
+        let rowStr = '';
+        for (let px = minX; px <= maxX; px++) {
+          const idx = (py * canvasSize + px) * 4;
+          const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+          rowStr += brightness > threshold ? '#' : ' ';
+        }
+        rows.push(rowStr);
+      }
+      return rows;
+    }
+
+    function generateFontMap() {
+      const fontMap = {};
+      for (let i = 32; i < 127; i++) {
+        fontMap[String.fromCharCode(i)] = getPixelMap(String.fromCharCode(i), {
+          font: '20px ubuntu',
+          threshold: 64,
+          canvasSize: 50
+        });
+      }
+      return fontMap;
+    }
+
+    function startSinetext() {
+      const pixelFont = generateFontMap();
+      const message = "Lilla AfrikaFestivalen 2025 - Norstuga Lycke - Midsommar - Husbandet - Sill";
+      const waveCanvas = document.getElementById('waveCanvas');
+      const starCanvas = document.getElementById("starCanvas");
+      const wctx = waveCanvas.getContext('2d');
+      const starCtx = starCanvas.getContext("2d");
+
+      function resize() {
+        waveCanvas.width = starCanvas.width = window.innerWidth;
+        waveCanvas.height = starCanvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener("resize", resize);
+
+      const PIXEL_SIZE = 5;
+      const LETTER_SPACING = 1;
+      const SCROLL_SPEED = 3;
+      const WAVE_AMPLITUDE = 250;
+      const WAVE_FREQUENCY = 0.002;
+
+      const getMessagePixelWidth = (msg) => {
+        return msg.split('').reduce((total, ch) => {
+          const rows = pixelFont[ch] || [" "];
+          return total + rows[0].length + LETTER_SPACING;
+        }, -LETTER_SPACING);
+      };
+
+      const totalPixelCells = getMessagePixelWidth(message);
+      let textX = waveCanvas.width;
+
+      function getRainbowColor(hue) {
+        return `hsl(${hue % 360}, 100%, 50%)`;
+      }
+
+      function animateWave(time) {
+        wctx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+        textX -= SCROLL_SPEED;
+        if (textX < -totalPixelCells * PIXEL_SIZE) textX = waveCanvas.width;
+        let drawX = textX;
+
+        for (const ch of message) {
+          const rows = pixelFont[ch] || [" "];
+          for (let row = 0; row < rows.length; row++) {
+            for (let col = 0; col < rows[0].length; col++) {
+              if (rows[row][col] === '#') {
+                const waveOffset = Math.sin((time + drawX + col * PIXEL_SIZE) * WAVE_FREQUENCY) * WAVE_AMPLITUDE;
+                const x = drawX + col * PIXEL_SIZE;
+                const y = waveCanvas.height / 2 - (rows.length * PIXEL_SIZE) / 2 + row * PIXEL_SIZE + waveOffset;
+                wctx.fillStyle = getRainbowColor(time * 0.1 + col * 10 + row * 15);
+                wctx.fillRect(x, y, PIXEL_SIZE, PIXEL_SIZE);
+              }
+            }
+          }
+          drawX += (rows[0].length + LETTER_SPACING) * PIXEL_SIZE;
+        }
+        requestAnimationFrame(animateWave);
+      }
+
+      const stars = Array.from({ length: 600 }, () => ({
+        x: Math.random() * starCanvas.width,
+        y: Math.random() * starCanvas.height,
+        z: Math.random() * starCanvas.width,
+      }));
+
+      function animateStars() {
+        starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
+        starCtx.fillStyle = "white";
+        for (const s of stars) {
+          s.z -= 2;
+          if (s.z <= 0) {
+            s.x = Math.random() * starCanvas.width;
+            s.y = Math.random() * starCanvas.height;
+            s.z = starCanvas.width;
+          }
+          const sx = (s.x - starCanvas.width / 2) * (starCanvas.width / s.z) + starCanvas.width / 2;
+          const sy = (s.y - starCanvas.height / 2) * (starCanvas.width / s.z) + starCanvas.height / 2;
+          const radius = (1 - s.z / starCanvas.width) * 4;
+          starCtx.beginPath();
+          starCtx.arc(sx, sy, radius, 0, Math.PI * 2);
+          starCtx.fill();
+        }
+        requestAnimationFrame(animateStars);
+      }
+
+      requestAnimationFrame(animateWave);
+      requestAnimationFrame(animateStars);
+    }
+
+    // ------------------ CONTROL FLOW -------------------
+    window.onload = () => {
+      const intro = document.getElementById("introScreen");
+      const sinetext = document.getElementById("sinetextScreen");
+
+      intro.style.display = "flex";
+      startIntroAnimation();
+
+      const audio = document.getElementById("bg-audio");
+        audio.play().catch((err) => {
+        console.warn("Autoplay failed:", err);
+        });
+
+      setTimeout(() => {
+        animationRunning = false;
+        clearTimeout(animationId);
+        intro.style.display = "none";
+        sinetext.style.display = "block";
+        startSinetext();
+      }, 10000);
+    };
+  </script>
+</body>
+</html>
