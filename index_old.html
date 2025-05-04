@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>80s Terminal Style Left-to-Right Wave</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      background-color: black;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-family: "Courier New", Courier, monospace;
+      color: #00ff00;
+    }
+
+    #result {
+      font-size: 2em;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    #fez-image {
+      width: 150px;
+      height: auto;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Image above the animated text -->
+  <img id="fez-image" src="fez.webp" alt="Fez">
+
+  <!-- Animated text container -->
+  <div id="result"></div>
+
+  <script>
+    function capitalizeAt(str, index) {
+      if (!str || index < 0 || index >= str.length) {
+        return str;
+      }
+      const lowerString = str.toLowerCase();
+      const capitalizedChar = lowerString[index].toUpperCase();
+      return lowerString.slice(0, index) + capitalizedChar + lowerString.slice(index + 1);
+    }
+
+    let animationRunning = false;
+    let animationId = null;
+
+    function startAnimation() {
+      stopAnimation();
+
+      const userString = "laddar lilla afrikafestivalen...";
+      const rotString = "-|/";
+
+      if (!userString) return;
+      animationRunning = true;
+
+      const n = userString.length;
+      const center = (n - 1) / 2;
+      let i = 0;
+
+      const minDelay = 20;
+      const maxDelay = 200;
+
+      function animate() {
+        if (!animationRunning) return;
+
+        document.getElementById('result').textContent = capitalizeAt(userString, i) + rotString[i % 3];
+
+        const distance = Math.abs(i - center) / center;
+        const sineFrac = Math.sin(distance * (Math.PI / 2));
+        const delay = minDelay + (maxDelay - minDelay) * sineFrac;
+
+        i++;
+        if (i >= n) {
+          i = 0;
+        }
+
+        animationId = setTimeout(animate, delay);
+      }
+
+      animate();
+    }
+
+    function stopAnimation() {
+      animationRunning = false;
+      if (animationId) {
+        clearTimeout(animationId);
+        animationId = null;
+      }
+    }
+
+    setTimeout(() => {
+      window.location = "sinetext.html"
+    }, 6000);
+    window.onload = startAnimation;
+  </script>
+</body>
+</html>
